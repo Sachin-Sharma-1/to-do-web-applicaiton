@@ -1,12 +1,11 @@
 let TC = document.querySelector(".ticket-container");
 let allFilters = document.querySelectorAll(".filter");
 let modalVisible = false;
+let allTasks;
 
 //******************************************* LOADING TICKETS ON REFRESHING PAGE**************************************************
 
 function loadTickets(color) {
-  let allTasks;
-
   $.ajax({
     url: "http://localhost:8080/tasks/",
     type: "GET",
@@ -82,15 +81,29 @@ let deleteBtn = document.querySelector(".delete");
 
 deleteBtn.addEventListener("click", function (e) {
   let selectedTickets = document.querySelectorAll(".ticket.active");
-  let allTasks = JSON.parse(localStorage.getItem("allTasks"));
   for (let i = 0; i < selectedTickets.length; i++) {
-    selectedTickets[i].remove();
-    let ticketID = selectedTickets[i].querySelector(".ticket-id").innerText;
-    allTasks = allTasks.filter(function (data) {
-      return "#" + data.ticketId != ticketID;
+    ticketId = selectedTickets[i].querySelector(".ticket-id").innerText;
+    console.log(ticketId.slice(1));
+    $.ajax({
+      url: "http://localhost:8080/tasks/" + ticketId.slice(1), // The URL of the server endpoint
+      type: "DELETE", // The HTTP method (GET, POST, PUT, DELETE, etc.)
+      success: function (response) {
+        let activeFilter = document.querySelector(".filter.active");
+        TC.innerHTML = "";
+        if (activeFilter) {
+          let priority = activeFilter.children[0].classList[0].split("-")[0];
+          loadTickets(priority);
+        } else {
+          loadTickets();
+        }
+        console.log(response);
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // Handle any errors that occur
+        console.error(textStatus + ": " + errorThrown);
+      },
     });
   }
-  localStorage.setItem("allTasks", JSON.stringify(allTasks));
 });
 
 //******************************************* ON CLICK OF '+' BUTTON **************************************************
@@ -206,17 +219,42 @@ lockBtn.addEventListener("click", function () {
     });
   } else {
     let selectedTickets = document.querySelectorAll(".ticket.active");
-    let allTasks = JSON.parse(localStorage.getItem("allTasks"));
+    let updatedTasksPayload = [];
     for (let i = 0; i < selectedTickets.length; i++) {
-      let ticketID = selectedTickets[i].querySelector(".ticket-id").innerText;
-      let task = selectedTickets[i].querySelector(".task").innerText;
-      for (let i = 0; i < allTasks.length; i++) {
-        if ("#" + allTasks[i].ticketId == ticketID) {
-          allTasks[i].task = task;
-          localStorage.setItem("allTasks", JSON.stringify(allTasks));
-        }
-      }
+      let updatedTask = {};
+
+      updatedTask["ticketId"] = selectedTickets[i]
+        .querySelector(".ticket-id")
+        .innerText.slice(1);
+      let found = allTasks.find(
+        (element) => element["ticketId"] === updatedTask["ticketId"]
+      );
+      updatedTask["task"] = selectedTickets[i].querySelector(".task").innerText;
+      updatedTask["priority"] = found["priority"];
+      updatedTasksPayload.push(updatedTask);
     }
+    $.ajax({
+      url: "http://localhost:8080/tasks/", // The URL of the server endpoint
+      type: "PUT", // The HTTP method (GET, POST, PUT, DELETE, etc.)
+      data: JSON.stringify(updatedTasksPayload),
+      contentType: "application/json",
+      success: function (response) {
+        // Handle the successful response from the server
+        let activeFilter = document.querySelector(".filter.active");
+        TC.innerHTML = "";
+        if (activeFilter) {
+          let priority = activeFilter.children[0].classList[0].split("-")[0];
+          loadTickets(priority);
+        } else {
+          loadTickets();
+        }
+        console.log(response);
+      },
+      error: function (jqXHR, textStatus, errorThrown) {
+        // Handle any errors that occur
+        console.error(textStatus + ": " + errorThrown);
+      },
+    });
     lockBtn.classList.remove("fa-unlock-alt");
     lockBtn.classList.add("fa-lock");
     taskToEdit.forEach(function (task) {
